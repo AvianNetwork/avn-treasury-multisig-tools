@@ -1,0 +1,17 @@
+*.pyc
+*.swp
+.env
+
+__pycache__/
+*.egg-info/
+build/
+dist/
+
+# Output folders for AVN tooling
+generate/*
+generated/*
+signed/*
+broadcast/*
+
+# Large local-only inputs (UTXO dumps, etc.)
+inputs/*

@@ -1,0 +1,4 @@
+requests
+pbkdf2
+pycryptodomex
+python-dotenv
