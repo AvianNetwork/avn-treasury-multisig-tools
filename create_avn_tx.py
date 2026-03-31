@@ -59,14 +59,40 @@ with open(UTXO_JSON, 'r') as data_file:
 
 start_time = time.time()
 
-inputCounter=0
-totalAmount=0
-txCounter=1
-txAmount=0
+inputCounter = 0
+totalAmount = 0
+txCounter = 1
+txAmount = 0
 ins = []
+created_txs: list[dict[str, Any]] = []
 dirname = os.path.dirname(__file__)
 directory = os.path.join(dirname,"generate")
 os.makedirs(directory, exist_ok=True)
+
+
+def _format_sats(sats: int) -> str:
+    # AVN is a Bitcoin-like chain; treat smallest unit as 1e-8.
+    return f"{sats:,} sats ({sats / 100_000_000:.8f})"
+
+
+def _write_tx_file(ins_list: list[dict[str, Any]], tx_input_sats: int, counter: int) -> str:
+    outs = [{'value': tx_input_sats - FEE, 'address': DEST_ADDRESS}]
+    tx = coin.mktx(ins_list, outs)
+    filename = "tx{0}.txt".format(str(counter).zfill(4))
+    with open(os.path.join(directory, filename), "w") as f:
+        f.write(serialize(tx))
+    created_txs.append(
+        {
+            "filename": filename,
+            "inputs": len(ins_list),
+            "input_sats": tx_input_sats,
+            "fee_sats": FEE,
+            "output_sats": tx_input_sats - FEE,
+        }
+    )
+    return filename
+
+
 for item in data:
     txAmount+=item['satoshis']
     inputCounter += 1
@@ -74,20 +100,57 @@ for item in data:
     ins.append(dict(output=output,value=item['satoshis'],script=REDEEM_SCRIPT))
     totalAmount += item['satoshis']-FEE
     if inputCounter >= MAX_INPUTS:
-        outs = [{'value': txAmount-FEE, 'address': DEST_ADDRESS}]
-        tx = coin.mktx(ins,outs)
-        filename = "tx{0}.txt".format(str(txCounter).zfill(4))
-        with open(os.path.join(directory, filename), "w") as f:
-            f.write(serialize(tx))
-        txCounter= txCounter+1
-        ins=[]
+        _write_tx_file(ins, txAmount, txCounter)
+        txCounter = txCounter + 1
+        ins = []
         txAmount = 0
         inputCounter = 0
     if totalAmount >= TOTAL_PAYMENTS:
-        outs = [{'value': txAmount-FEE, 'address': DEST_ADDRESS}]
-        tx = coin.mktx(ins,outs)
-        filename = "tx{0}.txt".format(str(txCounter).zfill(4))
-        with open(os.path.join(directory, filename), "w") as f:
-            f.write(serialize(tx))
+        _write_tx_file(ins, txAmount, txCounter)
         break
-print("--- %s seconds ---" % (time.time() - start_time))
+
+elapsed = time.time() - start_time
+files_created = len(created_txs)
+inputs_used = sum(t["inputs"] for t in created_txs)
+input_sats_total = sum(t["input_sats"] for t in created_txs)
+fee_sats_total = sum(t["fee_sats"] for t in created_txs)
+output_sats_total = sum(t["output_sats"] for t in created_txs)
+
+pending_inputs = len(ins)
+pending_input_sats = txAmount
+
+print(f"--- {elapsed:.3f} seconds ---")
+print("Summary:")
+print(f"  UTXOs source: {UTXO_JSON}")
+print(f"  Output dir : {directory}")
+print(f"  Dest addr  : {DEST_ADDRESS}")
+print(f"  Max inputs/tx: {MAX_INPUTS:,}")
+print(f"  Fee/tx     : {_format_sats(FEE)}")
+print(f"  TX files created: {files_created:,}")
+if files_created:
+    print(f"  Inputs used     : {inputs_used:,}")
+    print(f"  Total input     : {_format_sats(input_sats_total)}")
+    print(f"  Total fees      : {_format_sats(fee_sats_total)}")
+    print(f"  Total output    : {_format_sats(output_sats_total)}")
+
+if pending_inputs:
+    print(
+        "  Note: there are pending inputs not written to a tx file "
+        f"({pending_inputs:,} inputs, {_format_sats(pending_input_sats)})."
+    )
+
+if files_created:
+    print("Files:")
+    # Avoid spamming the console if a huge batch was generated.
+    if files_created <= 10:
+        to_show = created_txs
+    else:
+        to_show = created_txs[:3] + [{"filename": "...", "inputs": None, "output_sats": None}] + created_txs[-3:]
+    for t in to_show:
+        if t["filename"] == "...":
+            print("  ...")
+            continue
+        print(
+            f"  {t['filename']}: inputs={t['inputs']:,}, "
+            f"out={_format_sats(int(t['output_sats']))}"
+        )
