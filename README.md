@@ -121,4 +121,4 @@ python reset_folders.py --yes --include-inputs
 
 ## Notes about the fork
 
-This repo was originally based on a Pycryptotools-style codebase. The library code is still present under `cryptos/` (and a parallel `cryptosx/`), but the primary purpose here is the AVN treasury multisig transaction workflow described above.
+This repo was originally based on a Pycryptotools-style codebase. The library code is still present under `cryptos/`, but the primary purpose here is the AVN treasury multisig transaction workflow described above.
