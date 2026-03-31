@@ -115,10 +115,23 @@ def run() -> None:
 
     redeem_pubkeys, m_required = _redeem_pubkeys_and_m(redeemScript)
     privkey_by_pubkey = _map_privkeys_to_pubkeys(privkeys, redeem_pubkeys)
-    if len(privkey_by_pubkey) < m_required:
+
+    if len(privkey_by_pubkey) == 0:
         raise SystemExit(
-            f"Not enough matching keys for this redeemScript: need {m_required}, found {len(privkey_by_pubkey)}."
+            "None of the provided WIF keys match the redeemScript pubkeys. "
+            "Double-check AVN_PRIVKEYS and AVN_REDEEM_SCRIPT."
         )
+
+    # Default behavior:
+    # - If you provide >= M keys, require fully-signed txs (old behavior)
+    # - If you provide < M keys, allow partial signing (multi-person sequential flow)
+    _require_full_env = os.environ.get("AVN_SIGN_REQUIRE_FULL", "").strip().lower()
+    if _require_full_env in {"1", "true", "yes", "y", "on"}:
+        require_full = True
+    elif _require_full_env in {"0", "false", "no", "n", "off"}:
+        require_full = False
+    else:
+        require_full = len(privkey_by_pubkey) >= m_required
 
     os.makedirs(signedDirectory, exist_ok=True)
     os.makedirs(generateDirectory, exist_ok=True)
@@ -198,13 +211,13 @@ def run() -> None:
                     modtx = signature_form(unsigned_tx_bytes, i, redeem_script_bytes, coin.hashcode)
                 sig_by_pub[pub] = ecdsa_tx_sign(modtx, priv, coin.hashcode)
 
-            if len(sig_by_pub) < m_required:
-                raise RuntimeError(
-                    f"Input {i}: only have {len(sig_by_pub)} valid signatures, need {m_required}."
-                )
+            ordered_sigs = [sig_by_pub[p] for p in redeem_pubkeys if p in sig_by_pub]
+            if require_full and len(ordered_sigs) < m_required:
+                raise RuntimeError(f"Input {i}: only have {len(ordered_sigs)} valid signatures, need {m_required}.")
 
-            ordered_sigs = [sig_by_pub[p] for p in redeem_pubkeys if p in sig_by_pub][:m_required]
-            apply_multisignatures(tx, i, redeemScript, ordered_sigs)
+            # Write whatever signatures we have (up to M). This supports sequential signing:
+            # signer1 produces 1-of-3, signer2 produces 2-of-3, signer3 produces 3-of-3.
+            apply_multisignatures(tx, i, redeemScript, ordered_sigs[:m_required])
 
         with open(os.path.join(signedDirectory, filename), "w") as out:
             out.write(serialize(tx))

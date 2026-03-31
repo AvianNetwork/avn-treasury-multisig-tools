@@ -40,7 +40,10 @@ def _safe_clear_dir(dir_path: Path) -> tuple[int, int]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Delete all files inside generate/, signed/, and broadcast/ (cross-platform)."
+        description=(
+            "Delete all files inside generate/, signed/, and broadcast/ (cross-platform). "
+            "Optionally include inputs/."
+        )
     )
     parser.add_argument(
         "--root",
@@ -54,6 +57,11 @@ def main() -> int:
         help="Directories (relative to root) to clear.",
     )
     parser.add_argument(
+        "--include-inputs",
+        action="store_true",
+        help="Also clear inputs/ (e.g., large local UTXO JSON dumps).",
+    )
+    parser.add_argument(
         "--yes",
         action="store_true",
         help="Do not prompt for confirmation.",
@@ -63,6 +71,8 @@ def main() -> int:
 
     root = Path(args.root).resolve()
     dirs = [str(d) for d in args.dirs]
+    if args.include_inputs and "inputs" not in dirs:
+        dirs.append("inputs")
 
     # Safety: refuse to run on an obviously wrong root.
     # (We expect this script to live in the repo root.)
