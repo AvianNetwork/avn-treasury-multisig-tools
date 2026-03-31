@@ -90,16 +90,33 @@ python create_avn_tx.py
 python sign_avn.py
 ```
 
+Sequential multi-signer flow (recommended when each signer holds only one key):
+
+- Signer 1: put unsigned tx files in `generate/`, set `AVN_PRIVKEYS=<your_wif>`, run `python sign_avn.py`, then send the resulting `signed/` folder to signer 2.
+- Signer 2: copy signer 1’s files into `generate/`, set `AVN_PRIVKEYS=<your_wif>`, run `python sign_avn.py`, then send `signed/` to signer 3.
+- Signer 3: repeat once more; the resulting `signed/` txs should now have M signatures and be ready to broadcast.
+
+By default `sign_avn.py` allows partial signing when you provide fewer than M keys. You can force full-sign enforcement with `AVN_SIGN_REQUIRE_FULL=true`.
+
 3) Broadcast them:
 
 ```bash
 python broadcast_avn.py
 ```
 
+`broadcast_avn.py` will use Avian Core JSON-RPC (`sendrawtransaction`) if RPC is configured (see `.env.example`).
+You can force behavior with `AVN_BROADCAST_METHOD=rpc` or `AVN_BROADCAST_METHOD=explorer`.
+
 4) Reset folders for a clean rerun:
 
 ```bash
 python reset_folders.py --yes
+```
+
+To also clear the local UTXO dump folder:
+
+```bash
+python reset_folders.py --yes --include-inputs
 ```
 
 ## Notes about the fork
